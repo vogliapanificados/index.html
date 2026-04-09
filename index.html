@@ -105,6 +105,7 @@
     <img id="preview" alt="Vista previa">
     <button class="remove-btn" onclick="resetForm()">✕</button>
   </div>
+  <div id="img-size-wrap" style="display:none; font-size:0.78rem; color:var(--muted); text-align:right; margin:-0.5rem 0 0.75rem;">Imagen comprimida: <b id="img-size"></b></div>
 
   <button class="btn" id="submitBtn" disabled onclick="enviar()">Procesar planilla</button>
 
@@ -132,7 +133,7 @@
 
 <script>
   // ⚠️ REEMPLAZÁ con la URL de tu webhook de n8n
-  const WEBHOOK_URL = 'https://juaninocera.app.n8n.cloud/webhook-test/bandejas-upload';
+  const WEBHOOK_URL = 'https://TU-N8N.app.n8n.cloud/webhook/bandejas-upload';
 
   const fileInput   = document.getElementById('fileInput');
   const dropzone    = document.getElementById('dropzone');
@@ -152,16 +153,43 @@
   function loadFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      previewEl.src = e.target.result;
-      previewWrap.style.display = 'block';
-      dropzone.style.display = 'none';
-      submitBtn.disabled = false;
-      currentBase64 = e.target.result.split(',')[1];
-      resultEl.style.display = 'none';
-      document.getElementById('data-preview').style.display = 'none';
-      resetBtn.style.display = 'none';
+      // Comprimir la imagen antes de guardarla
+      comprimirImagen(e.target.result, 1024, 0.72, (comprimida, pesoKB) => {
+        previewEl.src = comprimida;
+        previewWrap.style.display = 'block';
+        dropzone.style.display = 'none';
+        submitBtn.disabled = false;
+        currentBase64 = comprimida.split(',')[1];
+        resultEl.style.display = 'none';
+        document.getElementById('data-preview').style.display = 'none';
+        resetBtn.style.display = 'none';
+    document.getElementById('img-size-wrap').style.display = 'none';
+        // Mostrar peso final
+        document.getElementById('img-size').textContent = pesoKB + ' KB';
+        document.getElementById('img-size-wrap').style.display = 'block';
+      });
     };
     reader.readAsDataURL(file);
+  }
+
+  function comprimirImagen(dataUrl, maxPx, calidad, callback) {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      // Redimensionar si supera maxPx
+      if (w > maxPx || h > maxPx) {
+        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else       { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const result = canvas.toDataURL('image/jpeg', calidad);
+      const kb = Math.round((result.length * 3) / 4 / 1024);
+      callback(result, kb);
+    };
+    img.src = dataUrl;
   }
 
   dropzone.addEventListener('dragover',  (e) => { e.preventDefault(); dropzone.classList.add('over'); });
@@ -230,6 +258,7 @@
     resultEl.style.display = 'none'; progressEl.style.display = 'none';
     document.getElementById('data-preview').style.display = 'none';
     resetBtn.style.display = 'none';
+    document.getElementById('img-size-wrap').style.display = 'none';
   }
 </script>
 </body>
