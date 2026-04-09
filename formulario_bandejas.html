@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Control de Bandejas</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #2d6a4f; --green-light: #f0f7f2; --green-border: #b7dcc8;
+    --gray: #f5f5f0; --text: #1a1a1a; --muted: #888; --border: #e0e0db;
+    --red-bg: #fff5f5; --red: #c53030; --red-border: #fca5a5;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--gray); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 1.5rem 1rem 3rem;
+  }
+  .card {
+    background: white; border-radius: 20px; padding: 1.75rem 1.5rem;
+    width: 100%; max-width: 440px; box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  }
+  .header { margin-bottom: 1.5rem; }
+  .header h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+  .header p  { font-size: 0.875rem; color: var(--muted); margin-top: 0.25rem; }
+
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 14px;
+    padding: 1.75rem 1rem; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: #fafaf8; margin-bottom: 1rem; position: relative;
+  }
+  .upload-zone:hover, .upload-zone.over { border-color: var(--green); background: var(--green-light); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-zone .icon  { font-size: 2.75rem; line-height: 1; margin-bottom: 0.5rem; }
+  .upload-zone .label { font-weight: 600; font-size: 0.95rem; color: var(--text); margin-bottom: 0.2rem; }
+  .upload-zone .hint  { font-size: 0.8rem; color: var(--muted); }
+
+  #preview-wrap { display: none; margin-bottom: 1rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); position: relative; }
+  #preview-wrap img { width: 100%; max-height: 220px; object-fit: contain; display: block; background: #fafaf8; }
+  #preview-wrap .remove-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(0,0,0,0.55); color: white; border: none; border-radius: 50%;
+    width: 28px; height: 28px; font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn {
+    width: 100%; padding: 1rem; background: var(--green); color: white;
+    border: none; border-radius: 12px; font-size: 1rem; font-weight: 600;
+    cursor: pointer; transition: background 0.2s, opacity 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  }
+  .btn:hover:not(:disabled) { background: #245c43; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #progress { display: none; margin-top: 1rem; font-size: 0.875rem; color: var(--muted); text-align: center; }
+  .progress-bar-wrap { height: 4px; background: var(--border); border-radius: 2px; margin-top: 0.5rem; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--green); border-radius: 2px; animation: indeterminate 1.4s ease infinite; }
+  @keyframes indeterminate {
+    0%   { width: 0%;  margin-left: 0%; }
+    50%  { width: 60%; margin-left: 20%; }
+    100% { width: 0%;  margin-left: 100%; }
+  }
+
+  #result { display: none; margin-top: 1rem; padding: 1rem; border-radius: 10px; font-size: 0.875rem; line-height: 1.5; }
+  #result.ok    { background: var(--green-light); color: var(--green); border: 1px solid var(--green-border); }
+  #result.error { background: var(--red-bg);      color: var(--red);   border: 1px solid var(--red-border); }
+  #result strong { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; }
+
+  #data-preview { display: none; margin-top: 1.25rem; }
+  #data-preview h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.5rem; }
+  .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { background: var(--gray); padding: 0.5rem 0.6rem; text-align: left; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; }
+  td.pos { text-align: right; color: #2d6a4f; font-weight: 600; }
+  td.neg { text-align: right; color: var(--red); font-weight: 600; }
+
+  .reset-btn {
+    margin-top: 1rem; width: 100%; padding: 0.65rem;
+    background: white; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 0.875rem; cursor: pointer; transition: background 0.15s;
+  }
+  .reset-btn:hover { background: var(--gray); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <h1>📦 Control de Bandejas</h1>
+    <p>Sacá foto a la planilla del día para registrarla automáticamente</p>
+  </div>
+
+  <div class="upload-zone" id="dropzone">
+    <input type="file" id="fileInput" accept="image/*" capture="environment">
+    <div class="icon">📷</div>
+    <div class="label">Tomar foto o elegir imagen</div>
+    <div class="hint">JPG o PNG de la planilla diaria</div>
+  </div>
+
+  <div id="preview-wrap">
+    <img id="preview" alt="Vista previa">
+    <button class="remove-btn" onclick="resetForm()">✕</button>
+  </div>
+
+  <button class="btn" id="submitBtn" disabled onclick="enviar()">Procesar planilla</button>
+
+  <div id="progress">
+    <span>Analizando imagen con IA... (~15 seg)</span>
+    <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+  </div>
+
+  <div id="result"></div>
+
+  <div id="data-preview">
+    <h3>Datos detectados</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Cliente</th><th>V.</th><th>S.Ant</th><th>Entrega</th><th>Recibido</th><th>Balance</th></tr>
+        </thead>
+        <tbody id="data-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <button class="reset-btn" id="resetBtn" style="display:none" onclick="resetForm()">Cargar otra planilla</button>
+</div>
+
+<script>
+  // ⚠️ REEMPLAZÁ con la URL de tu webhook de n8n
+  const WEBHOOK_URL = 'https://TU-N8N.app.n8n.cloud/webhook/bandejas-upload';
+
+  const fileInput   = document.getElementById('fileInput');
+  const dropzone    = document.getElementById('dropzone');
+  const previewEl   = document.getElementById('preview');
+  const previewWrap = document.getElementById('preview-wrap');
+  const submitBtn   = document.getElementById('submitBtn');
+  const progressEl  = document.getElementById('progress');
+  const resultEl    = document.getElementById('result');
+  const resetBtn    = document.getElementById('resetBtn');
+
+  let currentBase64 = null;
+
+  fileInput.addEventListener('change', function() {
+    if (this.files[0]) loadFile(this.files[0]);
+  });
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      previewEl.src = e.target.result;
+      previewWrap.style.display = 'block';
+      dropzone.style.display = 'none';
+      submitBtn.disabled = false;
+      currentBase64 = e.target.result.split(',')[1];
+      resultEl.style.display = 'none';
+      document.getElementById('data-preview').style.display = 'none';
+      resetBtn.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  dropzone.addEventListener('dragover',  (e) => { e.preventDefault(); dropzone.classList.add('over'); });
+  dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('over'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault(); dropzone.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) loadFile(f);
+  });
+
+  async function enviar() {
+    if (!currentBase64) return;
+    submitBtn.disabled = true;
+    progressEl.style.display = 'block';
+    resultEl.style.display = 'none';
+    document.getElementById('data-preview').style.display = 'none';
+
+    try {
+      const resp = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: currentBase64 })
+      });
+      const data = await resp.json();
+      progressEl.style.display = 'none';
+      resultEl.style.display = 'block';
+
+      if (resp.ok && data.status === 'ok') {
+        resultEl.className = 'result ok';
+        resultEl.innerHTML = `<strong>✅ Planilla cargada</strong>Fecha: <b>${data.fecha}</b> &nbsp;·&nbsp; Chofer: <b>${data.chofer || '-'}</b><br>${data.registros_procesados} registro(s) guardados en Google Sheets`;
+        if (data.registros && data.registros.length) renderTable(data.registros);
+        resetBtn.style.display = 'block';
+      } else {
+        resultEl.className = 'result error';
+        resultEl.innerHTML = `<strong>❌ Error</strong>${data.mensaje || 'No se pudo procesar. Intentá de nuevo.'}`;
+        submitBtn.disabled = false;
+      }
+    } catch (err) {
+      progressEl.style.display = 'none';
+      resultEl.style.display = 'block';
+      resultEl.className = 'result error';
+      resultEl.innerHTML = `<strong>❌ Error de conexión</strong>Verificá tu internet e intentá de nuevo.`;
+      submitBtn.disabled = false;
+    }
+  }
+
+  function renderTable(registros) {
+    document.getElementById('data-body').innerHTML = registros.map(r => {
+      const bal = r.balance ?? ((r.saldo_anterior||0) + (r.entrega||0) - (r.recibido||0));
+      return `<tr>
+        <td>${r.nombre_cliente}</td>
+        <td class="num">${r.vuelta}</td>
+        <td class="num">${r.saldo_anterior ?? '-'}</td>
+        <td class="num">${r.entrega ?? '-'}</td>
+        <td class="num">${r.recibido ?? '-'}</td>
+        <td class="${bal > 0 ? 'pos' : bal < 0 ? 'neg' : 'num'}">${bal}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('data-preview').style.display = 'block';
+  }
+
+  function resetForm() {
+    fileInput.value = ''; currentBase64 = null;
+    previewEl.src = ''; previewWrap.style.display = 'none';
+    dropzone.style.display = 'block'; submitBtn.disabled = true;
+    resultEl.style.display = 'none'; progressEl.style.display = 'none';
+    document.getElementById('data-preview').style.display = 'none';
+    resetBtn.style.display = 'none';
+  }
+</script>
+</body>
+</html>
